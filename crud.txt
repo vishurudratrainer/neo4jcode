@@ -36,6 +36,18 @@ If 'TechLogistics' is no longer a supplier and you want to remove all its connec
 Cypher
 MATCH (s:Supplier {name: 'TechLogistics'})-[r]-()
 DELETE r
+1. Delete Relationships by Property Value
+MATCH ()-[r:SHIPS]->()
+WHERE r.cost > 10
+DELETE r
+
+
+MATCH ()-[r:SHIPS]->()
+WHERE r.cost > 10
+CALL {
+  WITH r
+  DELETE r
+} IN TRANSACTIONS OF 5000 ROWS
 
 // ==========================================================
 // 2. UPDATE (SET / REMOVE)
@@ -103,3 +115,39 @@ CALL {
   WITH o
   DETACH DELETE o
 } IN TRANSACTIONS OF 2000 ROWS;
+
+
+
+. Find All Dangling Nodes
+To simply see which nodes have zero relationships:
+
+Cypher
+MATCH (n)
+WHERE NOT (n)--()
+RETURN n
+NOT (n)--(): This looks for any node n that does not have a connection (in either direction) to any other node.
+
+2. Delete All Dangling Nodes
+If you want to remove them entirely from the database to save space and keep the graph clean:
+
+Cypher
+MATCH (n)
+WHERE NOT (n)--()
+DELETE n
+3. Targeting Specific Labels
+Usually, you don't want to delete everything that's disconnected (some entities might naturally sit alone). It is best practice to target specific labels, like deleting Products that aren't being shipped anymore:
+
+Cypher
+MATCH (p:Product)
+WHERE NOT (p)<-[:SHIPS]-()
+DELETE p
+This specifically looks for Product nodes that have no incoming SHIPS relationship.
+
+🚀 The "Cleanup" Workflow
+The best practice for a full cleanup after your previous steps would look like this:
+
+Delete expensive shipping: MATCH ()-[r:SHIPS]->() WHERE r.cost > 10 DELETE r
+
+Delete disconnected Products: MATCH (p:Product) WHERE NOT (p)--() DELETE p
+
+Delete disconnected Suppliers: MATCH (s:Supplier) WHERE NOT (s)--() DELETE s
