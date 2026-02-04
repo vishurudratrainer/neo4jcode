@@ -27,8 +27,8 @@ MERGE (s1:Supplier {id: 'S1'}) SET s1.name = 'TechCorp'
 MERGE (p1:Product {id: 'P1'}) SET p1.name = 'Laptop', p1.price = 1200
 
 // This creates the relationship between the specific nodes found above
-MERGE (s1)-[:SHIPS {cost: 50}]->(p1)
-MERGE (p1)-[:IN]->(c1)
+MERGE (s1:Supplier {id: 'S1'})-[:SHIPS {cost: 50}]->(p1:Product {id: 'P1'})
+MERGE (p1:p1:Product {id: 'P1'})-[:IN]->(c1:Category {name: 'Electronics'})
 
 RETURN *
 
