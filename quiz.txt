@@ -1,0 +1,61 @@
+Here is a Final Troubleshooting Quiz and Graduation Challenge designed to cement everything your trainees have learned. This acts as a perfect "Final Slide" for your presentation.
+
+🧠 Part 1: The "What's Wrong?" Quiz
+Present these scenarios to the class and ask them to identify the mistake.
+
+Scenario 1: The Invisible Index
+Trainee: "I created an index on :Person(email), but when I run PROFILE MATCH (p:Person {email: 'a@b.com'}) RETURN p, it still shows AllNodesScan. Why?"
+
+Answer: Neo4j indexes are schema-based. If the index was created on :User(email) but the query is looking for :Person(email), the index won't be used.
+
+Lesson: Labels must match exactly.
+
+Scenario 2: The Memory Leak
+Trainee: "My Java app crashes with OutOfMemoryError when I try to import a 5GB CSV file using LOAD CSV."
+
+Answer: By default, Neo4j tries to run the entire import in a single transaction.
+
+Lesson: Use Subqueries with Transactions (Neo4j 5.x) to batch the work:
+
+Cypher
+LOAD CSV WITH HEADERS FROM 'file:///large.csv' AS row
+CALL {
+  WITH row
+  MERGE (:Data {id: row.id})
+} IN TRANSACTIONS OF 1000 ROWS;
+Scenario 3: The Ghost Property
+Trainee: "I tried to find all people without a phone number using MATCH (p:Person {phone: null}), but it returns 0 results even though many don't have phones."
+
+Answer: In Neo4j, null means the property does not exist. You can't match it with {prop: null}.
+
+Lesson: Use WHERE NOT p.phone IS NOT NULL or WHERE NOT EXISTS(p.phone).
+
+🏆 Part 2: The Graduation Challenge
+Give them 20 minutes to solve this "Real-World" ticket.
+
+The Ticket: "Our recommendation engine is timing out. We need to find 'Sub-Managers' (Managers who report to other Managers) who have 'Java' skills, but only for those hired in the last 2 years."
+
+The Requirements:
+
+Integrity: Ensure Employee IDs are unique.
+
+Performance: Range index for hiredDate.
+
+Search: Use a Full-Text search for the "Java" skill in their bio.
+
+The Query: Must use PROFILE to prove it uses indexes.
+
+💡 The Solution Key (For You)
+Cypher
+// 1. Setup
+CREATE CONSTRAINT FOR (e:Employee) REQUIRE e.id IS UNIQUE;
+CREATE INDEX FOR (e:Employee) ON (e.hiredDate);
+CREATE FULLTEXT INDEX bio_idx FOR (e:Employee) ON EACH ["bio"];
+
+// 2. The Optimized Query
+PROFILE
+CALL db.index.fulltext.queryNodes("bio_idx", "Java") YIELD node AS e, score
+MATCH (e)-[:REPORTS_TO]->(m:Manager)
+WHERE e:Manager 
+  AND e.hiredDate > date() - duration('P2Y')
+RETURN e.name, m.name, score;

@@ -1,0 +1,30 @@
+// 1. Create Products
+CREATE (p1:Product {id: 'P1', name: 'MacBook Pro', category: 'Laptop'})
+CREATE (p2:Product {id: 'P2', name: 'iPhone 15', category: 'Phone'})
+CREATE (p3:Product {id: 'P3', name: 'AirPods Pro', category: 'Audio'})
+CREATE (p4:Product {id: 'P4', name: 'USB-C Cable', category: 'Accessory'})
+CREATE (p5:Product {id: 'P5', name: 'Monitor Arm', category: 'Office'});
+
+// 2. Create Customers
+CREATE (c1:Customer {id: 'C-101', name: 'Alice'})
+CREATE (c2:Customer {id: 'C-102', name: 'Bob'})
+CREATE (c3:Customer {id: 'C-103', name: 'Charlie'})
+CREATE (c4:Customer {id: 'C-104', name: 'Dave'});
+
+// 3. Create Fraud-related Contact Info
+CREATE (ph1:Phone {value: '555-0123'})
+CREATE (ph2:Phone {value: '555-9999'}) // The "Suspicious" shared phone
+CREATE (addr:Address {value: '123 Graph Lane, NY'});
+
+// 4. Create Purchase Relationships (Recommendations)
+// Alice bought a MacBook and an iPhone
+CREATE (c1)-[:PURCHASED]->(p1), (c1)-[:PURCHASED]->(p2)
+// Bob bought a MacBook, an iPhone, AND AirPods (The link!)
+CREATE (c2)-[:PURCHASED]->(p1), (c2)-[:PURCHASED]->(p2), (c2)-[:PURCHASED]->(p3)
+// Charlie bought an iPhone and a USB-C Cable
+CREATE (c3)-[:PURCHASED]->(p2), (c3)-[:PURCHASED]->(p4)
+
+// 5. Create Fraud Connections (Sharing Phone/Address)
+CREATE (c3)-[:HAS_CONTACT]->(ph2)
+CREATE (c4)-[:HAS_CONTACT]->(ph2) // Dave and Charlie share a phone (Suspect!)
+CREATE (c4)-[:HAS_CONTACT]->(addr);

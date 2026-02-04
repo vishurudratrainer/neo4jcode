@@ -1,0 +1,8 @@
+ docker run --name neo4j-instance -p 7474:7474 -p 7687:7687 -d  -v C:\neo4j\data:/data -v C:\neo4j\logs:/logs -v C:\neo4j\import:/var/lib/neo4j/import -v C:\neo4j\plugins:/plugins --env NEO4J_AUTH=neo4j/your_chosen_password neo4j:latest
+
+docker run \
+    --name neo4j-training \
+    -p 7474:7474 -p 7687:7687 \
+    -e NEO4J_AUTH=neo4j/password \
+    -e NEO4J_PLUGINS='["apoc"]' \
+    neo4j:latest

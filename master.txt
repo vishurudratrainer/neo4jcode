@@ -1,0 +1,111 @@
+// ==========================================================
+// STAGE 1: SCHEMA & INTEGRITY
+// ==========================================================
+// Create a constraint to ensure Part IDs are unique (Automatically creates a Range Index)
+CREATE CONSTRAINT part_id_unique IF NOT EXISTS 
+FOR (p:Part) REQUIRE p.id IS UNIQUE;
+
+// Create a standard index for Supplier lookups
+CREATE INDEX supplier_city_idx IF NOT EXISTS 
+FOR (s:Supplier) ON (s.city);
+
+// Create a Full-Text index for fuzzy searching names/categories
+CREATE FULLTEXT INDEX part_search IF NOT EXISTS 
+FOR (p:Part) ON EACH ["name", "category"];
+
+
+// ==========================================================
+// STAGE 2: BATCH DATA INGESTION (Simulating 1M+ rows)
+// ==========================================================
+// This block uses subquery transactions to keep memory usage low
+UNWIND [
+  {id: 'P1', name: 'Hydraulic Pump', cost: 1200, cat: 'Hydraulics', vendor: 'FluidPower', city: 'Mumbai'},
+  {id: 'P2', name: 'Steel Valve', cost: 450, cat: 'Hardware', vendor: 'IronWorks', city: 'Pune'},
+  {id: 'P3', name: 'Pressure Gauge', cost: 150, cat: 'Hydraulics', vendor: 'FluidPower', city: 'Mumbai'},
+  {id: 'P4', name: 'Copper Pipe', cost: 300, cat: 'Hardware', vendor: 'IronWorks', city: 'Pune'}
+] AS row
+CALL {
+  WITH row
+  MERGE (p:Part {id: row.id})
+  SET p.name = row.name, p.cost = row.cost, p.category = row.cat
+  
+  MERGE (s:Supplier {name: row.vendor})
+  SET s.city = row.city
+  
+  MERGE (s)-[:SUPPLIES]->(p)
+} IN TRANSACTIONS OF 2 ROWS; // Using small batch for demo purposes
+
+
+// ==========================================================
+// STAGE 3: UPDATES & EVOLUTION
+// ==========================================================
+// Promote a supplier to "Preferred" and update part status
+MATCH (s:Supplier {name: 'FluidPower'})
+SET s:PreferredVendor, s.rating = 4.8
+WITH s
+MATCH (s)-[:SUPPLIES]->(p:Part)
+SET p.status = 'Stocked';
+
+
+// ==========================================================
+// STAGE 4: ADVANCED QUERY & PROFILING
+// ==========================================================
+// Scenario: Find Hydraulics parts under 1000 in Mumbai
+// Use PROFILE to see if our city index and cost logic are efficient
+PROFILE
+MATCH (s:Supplier {city: 'Mumbai'})-[:SUPPLIES]->(p:Part)
+WHERE p.category = 'Hydraulics' AND p.cost < 2000
+RETURN p.name, s.name, p.cost;
+
+
+// ==========================================================
+// STAGE 5: FUZZY SEARCH (Full-Text)
+// ==========================================================
+// Search for anything related to 'Hydraulic' or 'Valve'
+CALL db.index.fulltext.queryNodes("part_search", "Hydraulic Valve") YIELD node, score
+RETURN node.name, node.category, score
+ORDER BY score DESC;
+
+
+// ==========================================================
+// STAGE 6: DEDUPLICATION LOGIC
+// ==========================================================
+// Simulate a duplicate entry
+CREATE (:Supplier {name: 'IronWorks', city: 'Pune', note: 'Duplicate'});
+
+// Cleanup: Identify duplicates and keep the one with the most relationships
+MATCH (s:Supplier {name: 'IronWorks'})
+WITH s, count { (s)--() } AS relCount
+ORDER BY relCount DESC
+WITH collect(s) AS duplicates
+WHERE size(duplicates) > 1
+UNWIND duplicates[1..] AS toDelete
+DETACH DELETE toDelete;
+
+
+// ==========================================================
+// STAGE 7: CLEANUP (Optional)
+// ==========================================================
+// To reset the database entirely:
+// MATCH (n) DETACH DELETE n;
+// DROP CONSTRAINT part_id_unique;
+// DROP INDEX supplier_city_idx;
+
+
+MATCH (alice:Customer {id: 'C-101'})-[:PURCHASED]->(item)<-[:PURCHASED]-(other)
+MATCH (other)-[:PURCHASED]->(reco)
+WHERE NOT (alice)-[:PURCHASED]->(reco)
+RETURN reco.name AS RecommendedProduct, count(*) AS Score;
+
+Student Insight: They will see AirPods Pro at the top. Explain that Charlie bought a USB-C Cable, but since Charlie and Alice only share 1 item (iPhone) while Bob and Alice share 2 items (MacBook & iPhone), Bob's recommendation is "stronger."
+
+
+The Goal: Identify which accounts are linked by shared sensitive information.
+
+The Query:
+
+Cypher
+MATCH (acc1:Customer)-[:HAS_CONTACT]->(info)<-[:HAS_CONTACT]-(acc2:Customer)
+WHERE acc1.id < acc2.id  // This prevents showing Alice-Bob AND Bob-Alice (duplicates)
+RETURN acc1.name, acc2.name, info.value AS SharedInfo, labels(info)[0] AS InfoType;
+Student Insight: This will flag Charlie and Dave. Explain that in a bank, this would trigger an automatic freeze on both accounts until the identity is verified.

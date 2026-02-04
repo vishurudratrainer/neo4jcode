@@ -1,0 +1,129 @@
+// Create a node with labels and properties
+CREATE (p:Person {name: 'Alice', age: 30})
+CREATE (p:Person {name: 'Bob', age: 35})
+
+// Create a relationship between existing nodes
+MATCH (a:Person {name: 'Alice'}), (b:Person {name: 'Bob'})
+CREATE (a)-[:FOLLOWS {since: 2023}]->(b)
+Warning: If you run CREATE (p:Person {name: 'Alice'}) five times, Neo4j will create five separate nodes all named Alice. In a graph, this creates "data pollution." Always use MERGE for entities and CREATE only for events/logs.
+
+// Find all people who follow Alice
+MATCH (follower:Person)-[:FOLLOWS]->(alice:Person {name: 'Bob'})
+RETURN follower.name, follower.age
+
+
+MERGE is essential in Java apps to avoid duplicate data.
+
+Cypher
+MERGE (p:Person {email: 'dev@example.com'})
+ON CREATE SET p.created = timestamp()
+ON MATCH SET p.lastLogin = timestamp()
+RETURN p
+
+
+// 1. Create the Employee and their first Skill
+MERGE (e:Employee {empId: 'E-101'})
+ON CREATE SET 
+    e.name = 'Sarah Chen', 
+    e.hiredDate = date(),
+    e.status = 'Probation'
+
+// 2. Create a Skill node
+MERGE (s:Skill {name: 'Java'})
+
+// 3. Connect them (The Insert of a Relationship)
+MERGE (e)-[r:HAS_SKILL]->(s)
+ON CREATE SET r.level = 'Expert'
+
+RETURN e, s
+
+Adding Properties One-by-One
+This is the most common method. If the property doesn't exist, Cypher creates it. If it does exist, Cypher updates it.
+
+Cypher
+MATCH (e:Employee {empId: 'E-101'})
+SET e.linkedinProfile = 'linkedin.com/in/sarahchen',
+    e.phoneNumber = '+1-555-0199'
+RETURN e
+
+
+
+// Update 1: Promote Sarah to 'Permanent' and add a new property
+MATCH (e:Employee {empId: 'E-101'})
+SET e.status = 'Permanent', 
+    e.lastPromotion = date()
+
+// Update 2: Assign her to a Project (Creating a new connection)
+MERGE (p:Project {name: 'Cloud Migration'})
+SET p.deadline = date('2026-12-31')
+
+MERGE (e)-[assignment:ASSIGNED_TO]->(p)
+SET assignment.role = 'Lead Developer'
+
+RETURN e, p
+
+
+
+
+There are two types of deletions: removing a specific detail or removing the entity entirely.
+
+Scenario A: Removing a specific skill (Delete Property/Relationship)
+
+Cypher
+// Remove the 'level' property from the relationship
+MATCH (:Employee {empId: 'E-101'})-[r:HAS_SKILL]->(:Skill {name: 'Java'})
+REMOVE r.level
+
+// OR: Break the connection entirely (Delete Relationship)
+MATCH (:Employee {empId: 'E-101'})-[r:HAS_SKILL]->(:Skill {name: 'Java'})
+DELETE r
+Scenario B: Offboarding the Employee (Delete Node)
+
+Cypher
+// If Sarah leaves, we must use DETACH to remove her and all her project ties
+MATCH (e:Employee {empId: 'E-101'})
+DETACH DELETE e
+
+
+Overwriting All Properties (=)
+Be careful with this one! If you use = instead of +=, Cypher will delete all existing properties on that node and replace them with only the ones you provide.
+
+Cypher
+MATCH (e:Employee {empId: 'E-101'})
+SET e = {name: 'Sarah Chen', status: 'Promoted'} 
+// Warning: empId, linkedinProfile, etc., are now GONE.
+
+
+Pattern Filtering
+Finding nodes that do not have a specific connection.
+
+Cypher
+MATCH (p:Person)
+WHERE NOT (p)-[:HAS_SUBSCRIPTION]->(:Service)
+RETURN p.name
+
+
+Aggregations
+Similar to GROUP BY in SQL, but implicit in Cypher.
+
+Cypher
+MATCH (p:Person)-[:FOLLOWS]->(other)
+RETURN p.name, count(other) AS followingCount
+ORDER BY followingCount DESC
+
+
+
+"Only add a lastLogin property if the user is currently 'Active'."
+
+Cypher
+MATCH (u:User {id: 42})
+WHERE u.status = 'Active'
+SET u.lastLogin = timestamp()
+
+
+Example B: Copying Properties between Nodes
+"Copy the address from the Company node to the Employee node."
+
+Cypher
+MATCH (e:Employee {empId: 'E-101'}), (c:Company {name: 'TechLink'})
+SET e.officeAddress = c.address
