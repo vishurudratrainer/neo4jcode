@@ -1,0 +1,26 @@
+// 1. Reset everything
+MATCH (n) DETACH DELETE n;
+
+// 2. Create Categories
+MERGE (c1:Category {name: 'Electronics'})
+MERGE (c2:Category {name: 'Accessories'})
+
+// 3. Create Suppliers
+MERGE (s1:Supplier {id: 'S1'}) SET s1.name = 'TechCorp', s1.rating = 5
+MERGE (s2:Supplier {id: 'S2'}) SET s2.name = 'GlobalLogistics', s2.rating = 3
+
+// 4. Create Products
+MERGE (p1:Product {id: 'P1'}) SET p1.name = 'Laptop', p1.price = 1200
+MERGE (p2:Product {id: 'P2'}) SET p2.name = 'Mouse', p2.price = 25
+MERGE (p3:Product {id: 'P3'}) SET p3.name = 'Monitor', p3.price = 300
+
+// 5. Link them (MERGE ensures it only creates the line if nodes exist)
+MERGE (s1)-[:SHIPS {cost: 50}]->(p1)
+MERGE (s1)-[:SHIPS {cost: 5}]->(p2)
+MERGE (s2)-[:SHIPS {cost: 20}]->(p3)
+MERGE (p1)-[:IN]->(c1)
+MERGE (p2)-[:IN]->(c2)
+MERGE (p3)-[:IN]->(c1)
+
+// 6. View the final, clean result
+MATCH (n) OPTIONAL MATCH (n)-[r]-() RETURN n, r;

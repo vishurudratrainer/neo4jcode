@@ -1,12 +1,36 @@
+// 1. Clean the database
 MATCH (n) DETACH DELETE n;
-CREATE (c1:Category {name: 'Electronics'}), (c2:Category {name: 'Accessories'})
-CREATE (s1:Supplier {id: 'S1', name: 'TechCorp', rating: 5, country: 'USA'})
-CREATE (s2:Supplier {id: 'S2', name: 'GlobalLogistics', rating: 3, country: 'India'})
-CREATE (p1:Product {id: 'P1', name: 'Laptop', price: 1200})
-CREATE (p2:Product {id: 'P2', name: 'Mouse', price: 25})
-CREATE (p3:Product {id: 'P3', name: 'Monitor', price: 300})
-CREATE (s1)-[:SHIPS {cost: 50}]->(p1), (s1)-[:SHIPS {cost: 5}]->(p2), 
-       (s2)-[:SHIPS {cost: 20}]->(p3), (p1)-[:IN]->(c1), (p2)-[:IN]->(c2), (p3)-[:IN]->(c1);
+
+// 2. Create all Nodes first
+CREATE (c1:Category {name: 'Electronics'}), 
+       (c2:Category {name: 'Accessories'}),
+       (s1:Supplier {id: 'S1', name: 'TechCorp', rating: 5, country: 'USA'}),
+       (s2:Supplier {id: 'S2', name: 'GlobalLogistics', rating: 3, country: 'India'}),
+       (p1:Product {id: 'P1', name: 'Laptop', price: 1200}),
+       (p2:Product {id: 'P2', name: 'Mouse', price: 25}),
+       (p3:Product {id: 'P3', name: 'Monitor', price: 300});
+
+// 3. Match existing nodes and link them (This prevents empty nodes)
+MATCH (s1:Supplier {id: 'S1'}), (p1:Product {id: 'P1'}) CREATE (s1)-[:SHIPS {cost: 50}]->(p1);
+MATCH (s1:Supplier {id: 'S1'}), (p2:Product {id: 'P2'}) CREATE (s1)-[:SHIPS {cost: 5}]->(p2);
+MATCH (s2:Supplier {id: 'S2'}), (p3:Product {id: 'P3'}) CREATE (s2)-[:SHIPS {cost: 20}]->(p3);
+MATCH (p1:Product {id: 'P1'}), (c1:Category {name: 'Electronics'}) CREATE (p1)-[:IN]->(c1);
+MATCH (p2:Product {id: 'P2'}), (c2:Category {name: 'Accessories'}) CREATE (p2)-[:IN]->(c2);
+MATCH (p3:Product {id: 'P3'}), (c1:Category {name: 'Electronics'}) CREATE (p3)-[:IN]->(c1);
+
+// 4. View the result
+MATCH (n) OPTIONAL MATCH (n)-[r]-() RETURN n, r;
+
+MERGE (c1:Category {name: 'Electronics'})
+MERGE (c2:Category {name: 'Accessories'})
+MERGE (s1:Supplier {id: 'S1'}) SET s1.name = 'TechCorp'
+MERGE (p1:Product {id: 'P1'}) SET p1.name = 'Laptop', p1.price = 1200
+
+// This creates the relationship between the specific nodes found above
+MERGE (s1)-[:SHIPS {cost: 50}]->(p1)
+MERGE (p1)-[:IN]->(c1)
+
+RETURN *
 
 Variation,Cypher Query,Explanation
 Simple Match,MATCH (p:Product) RETURN p,Returns all Product nodes.
