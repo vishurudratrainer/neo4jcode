@@ -1,0 +1,83 @@
+// ==========================================================
+// 1. INSERT (CREATE / MERGE)
+// ==========================================================
+
+// A. Standard Create (Always creates a new node, even if it's a duplicate)
+CREATE (p:Product {id: 'P-100', name: 'USB-C Hub', price: 50});
+
+// B. Merge (The "Upsert" - Checks if it exists first to avoid duplicates)
+MERGE (s:Supplier {name: 'TechLogistics'})
+ON CREATE SET s.joinedDate = date(), s.status = 'New'
+ON MATCH SET s.lastSeen = date();
+
+// C. Create with Relationship
+MATCH (p:Product {id: 'P-100'}), (s:Supplier {name: 'TechLogistics'})
+CREATE (s)-[:SHIPS {cost: 5}]->(p);
+
+
+// ==========================================================
+// 2. UPDATE (SET / REMOVE)
+// ==========================================================
+
+// A. Update or Add a Property
+MATCH (p:Product {id: 'P-100'})
+SET p.price = 45, p.stock = 20;
+
+// B. Rename/Replace all properties (using += to append/update)
+MATCH (p:Product {id: 'P-100'})
+SET p += {discount: 0.1, clearance: true};
+
+// C. Remove a single property (makes it null)
+MATCH (p:Product {id: 'P-100'})
+REMOVE p.clearance;
+
+// D. Update a Label (Add a new "Tag")
+MATCH (s:Supplier {name: 'TechLogistics'})
+SET s:International; // Now has two labels: Supplier and International
+
+
+// ==========================================================
+// 3. DELETE (DELETE / DETACH DELETE)
+// ==========================================================
+
+// A. Delete a Relationship only (The nodes remain)
+MATCH (s:Supplier {name: 'TechLogistics'})-[r:SHIPS]->(p:Product)
+DELETE r;
+
+// B. Detach Delete (Deletes the node and all its arrows)
+// Use this for a specific node under a condition
+MATCH (p:Product)
+WHERE p.id = 'P-100'
+DETACH DELETE p;
+
+// C. Conditional Bulk Delete
+// Delete all products in a category that are too expensive
+MATCH (p:Product)
+WHERE p.category = 'OldHardware' AND p.price > 1000
+DETACH DELETE p;
+
+
+
+
+// Assume $data is a list of 10,000 new products
+UNWIND $data AS row
+CALL {
+  WITH row
+  MERGE (p:Product {id: row.id})
+  SET p.name = row.name, p.price = toFloat(row.price)
+} IN TRANSACTIONS OF 2000 ROWS;
+
+
+MATCH (p:Product {category: 'Electronics'})
+CALL {
+  WITH p
+  SET p.price = p.price * 1.10
+} IN TRANSACTIONS OF 5000 ROWS;
+
+
+MATCH (o:Order)
+WHERE o.date < '2021-01-01'
+CALL {
+  WITH o
+  DETACH DELETE o
+} IN TRANSACTIONS OF 2000 ROWS;
