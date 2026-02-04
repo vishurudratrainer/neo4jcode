@@ -4,7 +4,7 @@
 
 // A. Standard Create (Always creates a new node, even if it's a duplicate)
 CREATE (p:Product {id: 'P-100', name: 'USB-C Hub', price: 50});
-
+MATCH (p:Product) RETURN p.name, p.price
 // B. Merge (The "Upsert" - Checks if it exists first to avoid duplicates)
 MERGE (s:Supplier {name: 'TechLogistics'})
 ON CREATE SET s.joinedDate = date(), s.status = 'New'
@@ -14,6 +14,28 @@ ON MATCH SET s.lastSeen = date();
 MATCH (p:Product {id: 'P-100'}), (s:Supplier {name: 'TechLogistics'})
 CREATE (s)-[:SHIPS {cost: 5}]->(p);
 
+MATCH (s:Supplier {name: 'TechLogistics'})-[r:SHIPS]->(p:Product {id: 'P-100'})
+RETURN s, r, p
+
+MATCH (s:Supplier {name: 'TechLogistics'})-[r:SHIPS]->(p:Product {id: 'P-100'})
+DELETE r
+
+2. Delete All Relationships of a Certain Type
+If you want to stop all shipping activity across the entire database:
+
+Cypher
+MATCH ()-[r:SHIPS]-()
+DELETE r
+Empty Parentheses (): This matches any node on either side of the relationship.
+
+-[:SHIPS]-: The absence of an arrow (>) means it will find the relationship regardless of which way it points.
+
+3. Delete All Relationships of a Specific Node
+If 'TechLogistics' is no longer a supplier and you want to remove all its connections (but keep the Supplier node itself):
+
+Cypher
+MATCH (s:Supplier {name: 'TechLogistics'})-[r]-()
+DELETE r
 
 // ==========================================================
 // 2. UPDATE (SET / REMOVE)

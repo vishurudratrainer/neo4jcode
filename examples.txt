@@ -42,7 +42,7 @@ This is the most common method. If the property doesn't exist, Cypher creates it
 
 Cypher
 MATCH (e:Employee {empId: 'E-101'})
-SET e.linkedinProfile = 'linkedin.com/in/sarahchen',
+SET e.linkedinProfile = 'linkedin.com/in/vishwa',
     e.phoneNumber = '+1-555-0199'
 RETURN e
 
