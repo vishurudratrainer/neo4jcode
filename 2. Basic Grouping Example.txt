@@ -1,0 +1,46 @@
+2. Basic Grouping Example
+If you want to count how many products are in each category:
+
+Cypher
+MATCH (p:Product)
+RETURN p.category, count(p) AS productCount
+How it works: Because p.category is not inside an aggregate function, Cypher automatically groups the results by unique category names.
+
+3. Aggregating Relationships
+This is where Neo4j shines. You can group data based on the connections between nodes.
+
+Scenario: Find each supplier and the total value of products they ship.
+
+Cypher
+MATCH (s:Supplier)-[:SHIPS]->(p:Product)
+RETURN s.name AS Supplier, 
+       sum(p.price) AS TotalValue, 
+       count(p) AS ItemCount
+ORDER BY TotalValue DESC
+4. The collect() Function (List Aggregation)
+Instead of just getting a number, you might want a list of all names in a group.
+
+Cypher
+MATCH (s:Supplier)-[:SHIPS]->(p:Product)
+RETURN s.name, collect(p.name) AS ProductList
+Result: You get one row per supplier, with a column containing a literal list of all their products: ["Monitor", "Keyboard", "Mouse"].
+
+5. Filtering Aggregates (The "HAVING" equivalent)
+In SQL, you use HAVING to filter groups. In Cypher, you use WITH to pass the aggregated results to a new filter.
+
+Scenario: Find suppliers who ship more than 10 products.
+
+Cypher
+MATCH (s:Supplier)-[:SHIPS]->(p:Product)
+WITH s, count(p) AS shipCount
+WHERE shipCount > 10
+RETURN s.name, shipCount
+6. Advanced: Aggregating on the Fly
+You can group by complex expressions, like the year of a date.
+
+Cypher
+MATCH (o:Order)
+RETURN o.date.year AS Year, sum(o.total) AS AnnualRevenue
+💡 Key Rule to Remember
+
+If your RETURN looks like this: RETURN a, b, count(c), sum(d), Neo4j is grouping by unique combinations of (a, b). If you want to change the grouping, you must change which variables are "plain" and which are "wrapped" in functions.

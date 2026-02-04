@@ -1,0 +1,43 @@
+MATCH (n) DETACH DELETE n;
+CREATE (c1:Category {name: 'Electronics'}), (c2:Category {name: 'Accessories'})
+CREATE (s1:Supplier {id: 'S1', name: 'TechCorp', rating: 5, country: 'USA'})
+CREATE (s2:Supplier {id: 'S2', name: 'GlobalLogistics', rating: 3, country: 'India'})
+CREATE (p1:Product {id: 'P1', name: 'Laptop', price: 1200})
+CREATE (p2:Product {id: 'P2', name: 'Mouse', price: 25})
+CREATE (p3:Product {id: 'P3', name: 'Monitor', price: 300})
+CREATE (s1)-[:SHIPS {cost: 50}]->(p1), (s1)-[:SHIPS {cost: 5}]->(p2), 
+       (s2)-[:SHIPS {cost: 20}]->(p3), (p1)-[:IN]->(c1), (p2)-[:IN]->(c2), (p3)-[:IN]->(c1);
+
+Variation,Cypher Query,Explanation
+Simple Match,MATCH (p:Product) RETURN p,Returns all Product nodes.
+Filtering,MATCH (p:Product) WHERE p.price > 100 RETURN p.name,Returns names of products > $100.
+Relationship Match,"MATCH (s:Supplier)-[:SHIPS]->(p:Product) RETURN s, p",Shows connections between Suppliers and Products.
+Pattern Discovery,"MATCH (s:Supplier)-->(p:Product)-->(c:Category) RETURN s.name, c.name",Finds which supplier supports which category.
+
+
+Variation,Cypher Query,Explanation
+Property Update,MATCH (p:Product {id: 'P1'}) SET p.price = 1100,Changes a specific value.
+Label Addition,MATCH (s:Supplier {country: 'India'}) SET s:Local,Adds a secondary label Local to specific nodes.
+Map Update,MATCH (p:Product {id: 'P2'}) SET p += {stock: 100},Uses += to add properties without overwriting old ones.
+Rename Rel,MATCH (s)-[r:SHIPS]->(p) CREATE (s)-[:DELIVERS]->(p) DELETE r,"""Renames"" a relationship by creating a new one and deleting the old."
+
+Variation,Cypher Query,Explanation
+Count Grouping,"MATCH (p:Product) RETURN p.category, count(*) as total",Groups by category and counts items.
+Sum/Avg,"MATCH (s:Supplier)-[r:SHIPS]->(p) RETURN s.name, sum(p.price)",Sums the value of all products per supplier.
+List Aggregation,"MATCH (c:Category)<-[:IN]-(p) RETURN c.name, collect(p.name)",Returns a category and a literal list of its products.
+Filtering Groups,"MATCH (p:Product) WITH p.category AS cat, avg(p.price) AS av WHERE av > 100 RETURN cat, av",Like SQL HAVING: filters based on the average.
+
+
+Variation,Cypher Query,Explanation
+Rel Only,MATCH ()-[r:SHIPS]->() WHERE r.cost > 30 DELETE r,"Deletes only the line, keeps the nodes."
+Node (Safe),MATCH (p:Product {id: 'P3'}) DELETE p,Only works if the node has no relationships.
+Node (Force),MATCH (p:Product {id: 'P3'}) DETACH DELETE p,Deletes the node and all connected lines.
+Cleanup,MATCH (n) WHERE NOT (n)--() DELETE n,"Deletes ""Island"" nodes that aren't connected to anything."
+
+
+Variation,Cypher Query,Explanation
+Batch Update,MATCH (p:Product) CALL { WITH p SET p.price = p.price * 1.1 } IN TRANSACTIONS OF 1000 ROWS,Updates huge datasets in chunks to save memory.
+Path Search,MATCH path = shortestPath((s:Supplier)-[*..5]-(c:Category)) RETURN path,Finds the quickest way a supplier is linked to a category.
+
+
+MATCH (n) OPTIONAL MATCH (n)-[r]-() RETURN n, r

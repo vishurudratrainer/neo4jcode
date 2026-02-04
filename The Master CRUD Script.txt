@@ -1,0 +1,73 @@
+The Master CRUD Script
+Phase 1: Clean Slate & Schema
+We start by clearing the database and setting the rules.
+show all nodes
+MATCH (n) RETURN labels(n), n.id, n.name
+Cypher
+// 1. Wipe everything to start fresh
+MATCH (n) DETACH DELETE n;
+
+// 2. Setup Schema
+CREATE CONSTRAINT FOR (p:Product) REQUIRE p.id IS UNIQUE;
+CREATE CONSTRAINT FOR (s:Supplier) REQUIRE s.id IS UNIQUE;
+
+// 3. Verify Schema (Table view)
+SHOW CONSTRAINTS;
+Phase 2: Insert (Creating the Graph)
+We create a Supplier, two Products, and link them.
+
+Cypher
+// 1. Create Data
+CREATE (s:Supplier {id: 'S_01', name: 'TechNode', rating: 4.8})
+CREATE (p1:Product {id: 'P_01', name: 'Monitor', price: 300})
+CREATE (p2:Product {id: 'P_02', name: 'Keyboard', price: 50})
+
+// 2. Create Relationships with properties
+
+
+MATCH (s:Supplier {id: 'S_01'}), (p:Product {id: 'P_01'})
+MERGE (s)-[:SHIPS {cost: 15, days: 2}]->(p)
+RETURN s, p
+
+MATCH (s:Supplier {id: 'S_01'}), (p:Product {id: 'P_02'})
+MERGE (s)-[:SHIPS {cost: 5, days: 2}]->(p)
+RETURN s, p
+
+// 3. SELECT: Show the initial graph
+MATCH path = (s:Supplier)-->(p:Product) 
+RETURN path;
+Phase 3: Update (Modifying Properties)
+We will increase the price of the monitor and upgrade the supplier status.
+
+Cypher
+// 1. Update Node and Relationship
+MATCH (s:Supplier {id: 'S_01'})-[r:SHIPS]->(p:Product {id: 'P_01'})
+SET p.price = 320, 
+    r.cost = 12,
+    s.status = 'Premium'
+
+// 2. SELECT: Show updated values
+MATCH (s:Supplier)-[r:SHIPS]->(p:Product)
+RETURN s.name, s.status, p.name, p.price, r.cost;
+Phase 4: Parameterized Relationship Delete
+This addresses your specific requirement: deleting a connection based on a parameter (in this case, cost).
+
+Cypher
+// 1. Delete relationship where cost is higher than 10
+MATCH (s:Supplier)-[r:SHIPS]->(p:Product)
+WHERE r.cost > 10
+DELETE r;
+
+// 2. SELECT: Show that only the low-cost relationship remains
+MATCH (n) RETURN n;
+Phase 5: Targeted Node Delete & Final Cleanup
+Finally, we remove "orphaned" products that no longer have a supplier.
+
+Cypher
+// 1. Delete 'Product' nodes that have no incoming relationships
+MATCH (p:Product)
+WHERE NOT (p)<-[:SHIPS]-()
+DELETE p;
+
+// 2. SELECT: Count remaining nodes
+MATCH (n) RETURN labels(n) AS Label, count(*) AS Count;
