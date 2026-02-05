@@ -1,0 +1,157 @@
+Neo4j Cluster mode is an Enterprise-only feature designed for High Availability (HA) and Scale-Out performance. If one server goes down, the database stays alive.In modern Neo4j (version 5.x and the 2026 releases), the architecture has shifted toward Autonomous Clustering, which decouples the physical servers from the databases they host.1. The Core Architecture: Primaries vs. SecondariesUnlike standard databases that use a simple "Master-Slave" setup, Neo4j uses a Quorum-based system.RoleResponsibilityData SafetyPrimaryHandles Writes and Reads. Participates in the Raft consensus protocol.High. Requires a majority (quorum) to commit any change.SecondaryHandles Reads Only. Acts as a local cache for scaling out query volume.Asynchronous. Replicated from Primaries; doesn't participate in write votes.2. How Writes Work (The Raft Protocol)When you send a write query to a cluster:One Primary is elected as the Leader.The Leader proposes the change to other Primaries.Once a Majority (e.g., 2 out of 3, or 3 out of 5) acknowledge the write, it is committed.This ensures that even if one server crashes mid-write, your data remains consistent and safe.3. Causal ConsistencyThis is the "secret sauce" for developers. It guarantees that you will always read your own writes.If you write a node to a Primary and immediately query a Secondary for it, the Neo4j driver uses a bookmark to ensure the Secondary has caught up before returning the result. No more "ghost data" or sync delays in your app.4. Autonomous Clustering (New in v5+)In older versions, you had to manually assign a server as a "Core" or "Read Replica." In Neo4j 5 and beyond:You define a Topology for each database (e.g., CREATE DATABASE orders TOPOLOGY 3 PRIMARIES 2 SECONDARIES).Neo4j automatically decides which physical servers in the cluster should host those copies.If a server fails, the cluster automatically reallocates the missing database copies to healthy servers.5. Docker Configuration ExampleTo run a basic cluster locally for testing, you need at least 3 instances. Here is the key environment variable logic:Bash# Common settings for all 3 nodes
+NEO4J_initial_dbms_default__primaries__count=3
+NEO4J_dbms_cluster_discovery_resolver_type=LIST
+NEO4J_dbms_cluster_endpoints=node1:6000,node2:6000,node3:6000
+Note: Each node must also have a unique server.cluster.raft.advertised_address so they can talk to each other across the Docker network.💡 When to use it?Production: Always. You cannot afford a single point of failure.Global Apps: Use a Multi-Data Center cluster to keep data physically close to users in different regions.Heavy Analytics: Use Secondaries to run heavy GDS algorithms or BI reports so they don't slow down the write-heavy "Primary" traffic.
+
+
+
+from neo4j import GraphDatabase
+
+# 1. Use 'neo4j://' for cluster routing (NEVER use 'bolt://' for clusters)
+URI = "neo4j://localhost:7687" 
+AUTH = ("neo4j", "password123")
+
+class ClusterApp:
+    def __init__(self, uri, auth):
+        self.driver = GraphDatabase.driver(uri, auth=auth)
+
+    def close(self):
+        self.driver.close()
+
+    # WRITES go to the Leader (Primary)
+    def add_city(self, city_name):
+        with self.driver.session(database="neo4j") as session:
+            # execute_write ensures the query hits the Leader
+            session.execute_write(self._create_city, city_name)
+
+    # READS are spread across Followers/Secondaries
+    def get_cities(self):
+        with self.driver.session(database="neo4j") as session:
+            # execute_read load-balances across all available readers
+            return session.execute_read(self._retrieve_cities)
+
+    @staticmethod
+    def _create_city(tx, name):
+        tx.run("MERGE (:City {name: $name})", name=name)
+
+    @staticmethod
+    def _retrieve_cities(tx):
+        result = tx.run("MATCH (c:City) RETURN c.name AS name")
+        return [record["name"] for record in result]
+
+# Practical usage
+app = ClusterApp(URI, AUTH)
+app.add_city("Singapore")
+print(f"Cities in cluster: {app.get_cities()}")
+app.close()
+
+
+
+CREATE DATABASE shipping TOPOLOGY 3 PRIMARIES 2 SECONDARIES;
+3 Primaries: Your data is safe. You can lose 1 node entirely, and the other 2 will elect a new leader and keep working.
+
+2 Secondaries: These are dedicated read-only copies. They are perfect for your Python execute_read calls, ensuring the 3 Primaries stay fast for writes.
+
+Check your Cluster Status
+Run this to see which physical server is currently the "Leader" for each database:
+
+Cypher
+SHOW DATABASES YIELD name, currentStatus, role, address
+ORDER BY name;
+
+
+
+Simulating a failover is the best way to prove your cluster (and your code) is truly "production-ready." In a Neo4j 5+ cluster, if the Leader node disappears, the remaining Primaries will automatically hold an election to choose a new Leader.
+
+The Python driver, using the neo4j:// protocol, will detect this change and automatically retry your queries on the new Leader.
+
+1. Step-by-Step Failover Simulation
+Using the docker-compose.yml from our previous step, follow these commands to see the cluster in action:
+
+Step A: Check the Initial State
+Open your Neo4j Browser (e.g., localhost:7474) and find out who the current Leader is:
+
+Cypher
+SHOW DATABASES YIELD name, address, role, currentStatus
+WHERE name = 'neo4j';
+Note which address has the LEADER role (e.g., server1:7687).
+
+Step B: Start a Continuous Write Script
+Run this Python script. It will attempt to add a new "Ping" node every second.
+
+Python
+import time
+from neo4j import GraphDatabase
+
+driver = GraphDatabase.driver("neo4j://localhost:7687", auth=("neo4j", "password123"))
+
+def work(tx, i):
+    tx.run("CREATE (:Ping {id: $i, time: datetime()})", i=i)
+
+i = 0
+while True:
+    try:
+        # execute_write is CRITICAL for failover; it handles retries automatically
+        driver.execute_query("CREATE (:Ping {id: $i})", i=i, database_="neo4j")
+        print(f"Successfully wrote Ping #{i}")
+        i += 1
+    except Exception as e:
+        print(f"Temporary Error: {e}")
+    time.sleep(1)
+Step C: "Kill" the Leader
+In your terminal, stop the Docker container that was identified as the Leader:
+
+Bash
+docker stop server1
+2. What Happens Next?
+Detection: The remaining nodes (server2, server3) stop hearing "heartbeats" from server1.
+
+Election: After a few hundred milliseconds, they trigger an election. One of them (e.g., server2) becomes the new Leader.
+
+Driver Recovery: * The Python driver might throw a single SessionExpiredException or ServiceUnavailable if a query was mid-flight.
+
+Because we used execute_query (or execute_write), the driver automatically catches this error, refreshes its internal routing table, and retries the query on server2.
+
+The script keeps running! You might see a small 1-2 second delay, but it won't crash.
+
+
+docker start server1
+
+
+from neo4j import GraphDatabase
+import logging
+
+# Set up logging to see the retries in the console
+logging.basicConfig(level=logging.INFO)
+
+URI = "neo4j://localhost:7687"
+AUTH = ("neo4j", "password123")
+
+driver = GraphDatabase.driver(
+    URI, 
+    auth=AUTH,
+    # If the Leader is down, keep retrying for 60 seconds
+    max_transaction_retry_time=60.0,
+    # Fail the connection attempt if the server doesn't respond in 5s
+    connection_timeout=5.0,
+    # Keep up to 100 connections ready to use
+    max_connection_pool_size=100
+)
+
+def perform_safe_write(name):
+    try:
+        # execute_query is the modern, high-level way to run queries with built-in retries
+        summary = driver.execute_query(
+            "MERGE (c:City {name: $name}) RETURN c",
+            name=name,
+            database_="neo4j"
+        )
+        print(f"Successfully wrote: {name}")
+    except Exception as e:
+        print(f"Write failed after 60 seconds of retries: {e}")
+
+# Simulate a write
+perform_safe_write("Mumbai")
+
+driver.close()
