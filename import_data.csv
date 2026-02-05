@@ -1,0 +1,4 @@
+supplier_id,supplier_name,product_id,product_name,price,category
+S1,TechCorp,P1,Laptop,1200,Electronics
+S1,TechCorp,P2,Mouse,25,Accessories
+S2,GlobalLog,P3,Monitor,300,Electronics

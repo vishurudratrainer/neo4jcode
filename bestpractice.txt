@@ -1,0 +1,230 @@
+// ==========================================================
+// 1. SCHEMA OPTIMIZATION (THE FOUNDATION)
+// Best Practice: Always have unique constraints on lookup IDs.
+// ==========================================================
+
+// Create a constraint (implicitly creates an index)
+CREATE CONSTRAINT product_id IF NOT EXISTS FOR (p:Product) REQUIRE p.id IS UNIQUE;
+
+// Create a composite index for multiple property lookups
+CREATE INDEX supplier_loc_rating IF NOT EXISTS FOR (s:Supplier) ON (s.country, s.rating);
+
+// ==========================================================
+// 2. PROFILING & EXPLAIN
+// Best Practice: Use EXPLAIN for dry-runs; PROFILE for actual cost.
+// ==========================================================
+
+// Use PROFILE to see "DbHits". High DbHits = Slow Query.
+PROFILE
+MATCH (p:Product)
+WHERE p.price > 500
+RETURN p.name;
+
+// ==========================================================
+// 3. AVOIDING "EAGER" OPERATORS (PERFORMANCE KILLER)
+// Best Practice: Don't MATCH and then immediately AGGREGATE 
+// if you can filter first.
+// ==========================================================
+
+// BAD: Causes a massive "Eager" operation (loads all data into memory)
+PROFILE
+MATCH (s:Supplier)-[:SHIPS]->(p:Product)
+WITH s, count(p) AS count
+WHERE s.country = 'USA'
+RETURN s.name, count;
+
+// GOOD: Filter the Supplier FIRST to reduce the working set
+PROFILE
+MATCH (s:Supplier {country: 'USA'})
+MATCH (s)-[:SHIPS]->(p:Product)
+RETURN s.name, count(p) AS count;
+
+// ==========================================================
+// 4. PARAMETERIZATION (THE "PLAN CACHE")
+// Best Practice: Never hardcode values. Use parameters so 
+// Neo4j can reuse the execution plan.
+// ==========================================================
+
+// Use $id instead of 'P1'
+MATCH (p:Product {id: $prodId})
+SET p.price = $newPrice
+RETURN p;
+
+// ==========================================================
+// 5. ANCHORING YOUR QUERIES
+// Best Practice: Always start your query with the most 
+// unique label/property to minimize the "search space."
+// ==========================================================
+
+// BAD: Starts with Category (Broad)
+MATCH (c:Category {name: 'Electronics'})<-[:IN]-(p:Product)<-[:SHIPS]-(s:Supplier)
+RETURN s.name;
+
+// GOOD: Starts with Supplier ID (Specific Anchor)
+MATCH (s:Supplier {id: 'S1'})-[:SHIPS]->(p:Product)-[:IN]->(c:Category)
+RETURN p.name;
+
+// ==========================================================
+// 6. SUBQUERY OPTIMIZATION (CALL {})
+// Best Practice: Use subqueries to limit processing on 
+// specific branches of the graph.
+// ==========================================================
+
+MATCH (s:Supplier)
+WHERE s.rating > 4
+CALL {
+    WITH s
+    MATCH (s)-[:SHIPS]->(p:Product)
+    RETURN p.name AS prodName
+    ORDER BY p.price DESC
+    LIMIT 3
+}
+RETURN s.name, prodName;
+
+
+
+// ==========================================================
+// 1. RELATIONSHIP DEGREE PRE-FILTERING
+// Best Practice: Use 'size()' on patterns to filter "Super Nodes" 
+// (nodes with thousands of relationships) before joining them.
+// ==========================================================
+
+// Optimization: Find Suppliers with more than 100 products 
+// WITHOUT actually traversing the relationships.
+PROFILE
+MATCH (s:Supplier)
+WHERE count { (s)-[:SHIPS]->() } > 100
+RETURN s.name;
+
+// ==========================================================
+// 2. EXISTENTIAL SUBQUERIES (EXISTS)
+// Best Practice: Use 'EXISTS' in WHERE clauses to stop 
+// searching as soon as ONE relationship is found.
+// ==========================================================
+
+// Optimization: This is faster than a standard MATCH because 
+// it doesn't build the full path in memory.
+PROFILE
+MATCH (p:Product)
+WHERE EXISTS { (p)-[:IN]->(:Category {name: 'Electronics'}) }
+RETURN p.name;
+
+// ==========================================================
+// 3. SEMI-JOIN OPTIMIZATION (WITH & DISTINCT)
+// Best Practice: Use DISTINCT early to prevent the 
+// "Path Explosion" (combinatorial explosion) problem.
+// ==========================================================
+
+// BAD: Every path combination is carried in memory
+MATCH (s:Supplier)-[:SHIPS]->(p:Product)-[:IN]->(c:Category)
+RETURN s.name, count(c);
+
+// GOOD: Reduce the stream to unique Suppliers before counting
+MATCH (s:Supplier)-[:SHIPS]->(p:Product)
+WITH DISTINCT s
+MATCH (s)-[:SHIPS]->(p:Product)-[:IN]->(c:Category)
+RETURN s.name, count(c);
+
+// ==========================================================
+// 4. PERIODIC COMMIT & SUBQUERIES (APOC/CALL)
+// Best Practice: For massive deletes or updates, use 
+// subqueries to avoid OutOfMemory (OOM) errors.
+// ==========================================================
+
+// Optimization: Deleting 1 million old logs in batches 
+// to keep the transaction log small.
+MATCH (log:Log)
+WHERE log.timestamp < '2023-01-01'
+CALL {
+    WITH log
+    DETACH DELETE log
+} IN TRANSACTIONS OF 10000 ROWS;
+
+// ==========================================================
+// 5. USING "INDEX HINTS"
+// Best Practice: If Neo4j picks a slow index, force it 
+// to use the correct one.
+// ==========================================================
+
+PROFILE
+MATCH (s:Supplier {country: 'USA', rating: 5})
+USING INDEX s:Supplier(country)
+RETURN s.name;
+
+
+
+
+// ==========================================================
+// 1. PRE-IMPORT SCHEMA (CRITICAL)
+// Optimization: You MUST create indexes before loading CSV. 
+// Without them, every 'MERGE' will scan the whole DB, 
+// making the import 100x slower.
+// ==========================================================
+MATCH (n) DETACH DELETE n;
+
+CREATE CONSTRAINT prod_id IF NOT EXISTS FOR (p:Product) REQUIRE p.id IS UNIQUE;
+CREATE CONSTRAINT supp_id IF NOT EXISTS FOR (s:Supplier) REQUIRE s.id IS UNIQUE;
+
+// ==========================================================
+// 2. THE BIG LOAD (CSV IMPORT)
+// Best Practice: Use 'USING PERIODIC COMMIT' (for large local files)
+// or 'CALL { ... } IN TRANSACTIONS' for modern Neo4j versions.
+// ==========================================================
+
+LOAD CSV WITH HEADERS FROM 'https://raw.githubusercontent.com/neo4j-contrib/training/master/relational-to-graph-import/products.csv' AS row
+// Optimization: Process in batches of 1000 to manage RAM
+CALL {
+    WITH row
+    // A. Create/Match Category
+    MERGE (c:Category {name: row.categoryName})
+
+    // B. Create/Match Product (Convert price string to float)
+    MERGE (p:Product {id: row.productID})
+    SET p.name = row.productName,
+        p.unitPrice = toFloat(row.unitPrice),
+        p.unitsInStock = toInteger(row.unitsInStock)
+
+    // C. Create Relationship
+    MERGE (p)-[:PART_OF]->(c)
+} IN TRANSACTIONS OF 1000 ROWS;
+
+
+
+// ==========================================================
+// 3. POST-LOAD OPTIMIZATION (APOC PARALLEL)
+// After loading, we calculate metrics across the whole set.
+// ==========================================================
+
+// Parallel update: Calculate a 'StockValue' for every product
+CALL apoc.periodic.iterate(
+  "MATCH (p:Product) RETURN p",
+  "SET p.totalStockValue = p.unitPrice * p.unitsInStock",
+  {batchSize: 5000, parallel: true}
+);
+
+// ==========================================================
+// 4. PROFILING THE IMPORTED DATA
+// Verification: Ensure we aren't doing "AllNodesScan"
+// ==========================================================
+
+PROFILE 
+MATCH (p:Product)-[:PART_OF]->(c:Category {name: 'Beverages'})
+WHERE p.unitPrice > 50
+RETURN p.name, p.unitPrice;
+
+// ==========================================================
+// 5. CLEANUP ORPHANS (POST-IMPORT INTEGRITY)
+// Best Practice: Check if any Category was created without Products.
+// ==========================================================
+
+MATCH (c:Category)
+WHERE NOT (c)<-[:PART_OF]-(:Product)
+DELETE c;
+
+// ==========================================================
+// 6. FINAL DATA VIEW
+// ==========================================================
+MATCH (p:Product)
+RETURN p.name, p.totalStockValue
+ORDER BY p.totalStockValue DESC
+LIMIT 10;

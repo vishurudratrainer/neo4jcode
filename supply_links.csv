@@ -1,0 +1,4 @@
+supplier_id,product_id,ship_cost
+S1,P1,50
+S1,P2,5
+S2,P3,20

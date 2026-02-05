@@ -15,7 +15,7 @@ public class BulkCsvLoader {
 
             // The 'file:///' prefix looks in the Neo4j 'import' directory
             String query =
-                    "LOAD CSV WITH HEADERS FROM 'file:///products.csv' AS row " +
+                    "LOAD CSV WITH HEADERS FROM 'file:///large_products.csv' AS row " +
                             "CALL { " +
                             "  WITH row " +
                             "  MERGE (p:Product {id: row.id}) " +

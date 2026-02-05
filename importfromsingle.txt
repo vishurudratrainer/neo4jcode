@@ -1,0 +1,58 @@
+MATCH (n)
+CALL {
+  WITH n
+  DETACH DELETE n
+} IN TRANSACTIONS OF 10000 ROWS;
+
+// ==========================================================
+// 1. PRE-LOAD: CONSTRAINTS
+// Crucial: This ensures MERGE is fast and prevents duplicates.
+// ==========================================================
+CREATE CONSTRAINT FOR (s:Supplier) REQUIRE s.id IS UNIQUE;
+CREATE CONSTRAINT FOR (p:Product) REQUIRE p.id IS UNIQUE;
+
+// ==========================================================
+// 2. THE BIG LOAD: TWO ENTITIES + ONE RELATIONSHIP
+// We use 'row' to populate both sides of the arrow.
+// ==========================================================
+:auto LOAD CSV WITH HEADERS FROM 'file:///import_data.csv' AS row
+// 1. Filter out rows where essential IDs are missing or blank
+WITH row 
+WHERE row.supplier_id IS NOT NULL AND row.product_id
+ IS NOT NULL 
+  AND trim(row.supplier_id) <> "" AND trim(row.product_id
+) <> ""
+
+CALL {
+    WITH row
+    // 2. Use trim() to ensure IDs don't have accidental spaces
+    MERGE (s:Supplier {id: trim(row.supplier_id)})
+    ON CREATE SET s.name = row.supplier_name
+ 
+    
+    MERGE (p:Product {id: trim(row.product_id
+)})
+    SET p.name = row.product_name,
+        p.price = toFloat(row.price)   
+
+    MERGE (s)-[r:SUPPLIES]->(p)
+    ON CREATE SET r.dateImported = datetime()
+} IN TRANSACTIONS OF 1000 ROWS;
+// ==========================================================
+// 3. OPTIMIZATION: AGGREGATE POST-LOAD
+// Now that data is in, we use the graph to find insights.
+// ==========================================================
+PROFILE
+MATCH (s:Supplier)-[:SUPPLIES]->(p:Product)
+RETURN s.name, 
+       count(p) AS totalProducts, 
+       sum(p.price) AS totalInventoryValue
+ORDER BY totalInventoryValue DESC;
+
+// ==========================================================
+// 4. BEST PRACTICE: DATA VALIDATION
+// Check for any "broken" rows where IDs might have been null.
+// ==========================================================
+MATCH (n)
+WHERE n.id IS NULL
+RETURN n AS BrokenNodes;

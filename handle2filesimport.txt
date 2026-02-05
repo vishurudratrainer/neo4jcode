@@ -1,0 +1,68 @@
+// ==========================================================
+// 1. PRE-IMPORT: OPTIMIZATION (THE MOST CRITICAL STEP)
+// We must create constraints first. Without these, the import 
+// will slow down exponentially as the database grows.
+// ==========================================================
+CREATE CONSTRAINT supplier_id_idx IF NOT EXISTS FOR (s:Supplier) REQUIRE s.id IS UNIQUE;
+CREATE CONSTRAINT product_id_idx IF NOT EXISTS FOR (p:Product) REQUIRE p.id IS UNIQUE;
+
+// Wait for indexes to be online (Good practice for big data)
+CALL db.awaitIndexes();
+
+// ==========================================================
+// 2. PHASE 1: LOADING NODES (BATCHED)
+// Using 'CALL { ... } IN TRANSACTIONS' prevents OutOfMemory errors.
+// ==========================================================
+
+// Load 1M+ Suppliers
+:auto LOAD CSV WITH HEADERS FROM 'file:///supplier_nodes.csv' AS row
+CALL {
+    WITH row
+    MERGE (s:Supplier {id: row.id})
+    SET s.name = row.name, 
+        s.country = row.country
+} IN TRANSACTIONS OF 10000 ROWS;
+
+// Load 1M+ Products
+:auto LOAD CSV WITH HEADERS FROM 'file:///products_nodes.csv' AS row
+CALL {
+    WITH row
+    MERGE (p:Product {id: row.id})
+    SET p.name = row.name, 
+        p.price = toFloat(row.price)
+} IN TRANSACTIONS OF 10000 ROWS;
+
+
+
+// ==========================================================
+// 3. PHASE 2: LOADING RELATIONSHIPS (JOINING)
+// This is usually the slowest part. We use APOC's parallel 
+// iterate for maximum speed if your CPU has multiple cores.
+// ==========================================================
+
+CALL apoc.periodic.iterate(
+  "LOAD CSV WITH HEADERS FROM 'file:///supply_links.csv' AS row RETURN row",
+  "MATCH (s:Supplier {id: row.supplier_id})
+   MATCH (p:Product {id: row.product_id})
+   MERGE (s)-[r:SHIPS]->(p)
+   SET r.cost = toFloat(row.ship_cost)",
+  {
+    batchSize: 10000, 
+    parallel: true, 
+    iterateList: true,
+    concurrency: 4 // Set this based on your CPU cores
+  }
+);
+
+// ==========================================================
+// 4. POST-IMPORT: QUALITY CONTROL & PERFORMANCE
+// ==========================================================
+
+// Optimization: Force a stats update so the Query Planner 
+// knows how big the data is now.
+CALL db.prepareForDataLoading(); 
+
+// Check for "Ghost Relationships" (Where a link exists to a missing node)
+PROFILE
+MATCH (s:Supplier)-[r:SHIPS]->(p:Product)
+RETURN count(r) AS TotalValidLinks;
