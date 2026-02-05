@@ -11,7 +11,7 @@ FOR (s:Supplier) ON (s.city);
 
 // Create a Full-Text index for fuzzy searching names/categories
 CREATE FULLTEXT INDEX part_search IF NOT EXISTS 
-FOR (p:Part) ON EACH ["name", "category"];
+FOR (p:Part) ON EACH [p.name,p.category];
 
 
 // ==========================================================
