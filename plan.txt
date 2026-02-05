@@ -1,0 +1,58 @@
+// --- STEP 1: SETUP ---
+// Create some dummy data (1 Supplier, 3 Products)
+CREATE (s:Supplier {id: 'S100', name: 'Global Tech'})
+CREATE (p1:Product {id: 'P1', name: 'Laptop', price: 1200})
+CREATE (p2:Product {id: 'P2', name: 'Mouse', price: 25})
+CREATE (p3:Product {id: 'P3', name: 'Monitor', price: 300})
+
+// 1. First, make sure the nodes exist and bind them to variables
+MERGE (s:Supplier {id: 'S100'})
+ON CREATE SET s.name = 'Global Tech'
+
+MERGE (p1:Product {id: 'P1'})
+ON CREATE SET p1.name = 'Laptop', p1.price = 1200
+
+MERGE (p2:Product {id: 'P2'})
+ON CREATE SET p2.name = 'Mouse', p2.price = 25
+
+MERGE (p3:Product {id: 'P3'})
+ON CREATE SET p3.name = 'Monitor', p3.price = 300
+
+// 2. Now link them. Since variables s, p1, p2, p3 are 'bound', 
+// Neo4j will only create the relationships.
+MERGE (s)-[:SUPPLIES]->(p1)
+MERGE (s)-[:SUPPLIES]->(p2)
+MERGE (s)-[:SUPPLIES]->(p3);
+CREATE (s)-[:SUPPLIES]->(p1), (s)-[:SUPPLIES]->(p2), (s)-[:SUPPLIES]->(p3);
+
+// --- STEP 2: THE "BAD" PLAN (Full Label Scan) ---
+// Even if we know the ID, without a constraint, Neo4j looks at EVERY Product.
+PROFILE 
+MATCH (p:Product) 
+WHERE p.id = 'P2' 
+RETURN p.name;
+
+
+
+PROFILE 
+MATCH (s:Supplier), (p:Product)
+WHERE s.id = 'S1' AND p.id = 'P1'
+CREATE (s)-[:SUPPLIES]->(p);
+
+
+MATCH (s:Supplier {id: 'S1'})
+CALL {
+  WITH s
+  MATCH (p:Product {id: 'P1'})
+  MERGE (s)-[:SUPPLIES]->(p)
+}
+// --- STEP 3: IMPROVE THE ENVIRONMENT ---
+// Adding a constraint creates an underlying index.
+CREATE CONSTRAINT FOR (p:Product) REQUIRE p.id IS UNIQUE;
+
+// --- STEP 4: THE "GOOD" PLAN (Index Seek) ---
+// Now the engine goes directly to the record.
+PROFILE 
+MATCH (p:Product) 
+WHERE p.id = 'P2' 
+RETURN p.name;

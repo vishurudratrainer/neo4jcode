@@ -46,6 +46,9 @@ RETURN s.name, count(p) AS count;
 // ==========================================================
 
 // Use $id instead of 'P1'
+:param prodId => 'P2'
+:param newPrice => 1500.0
+:params {prodId: 'P2', newPrice: 1500.0}
 MATCH (p:Product {id: $prodId})
 SET p.price = $newPrice
 RETURN p;
