@@ -7,8 +7,8 @@ MATCH (a:Person {name: 'Alice'}), (b:Person {name: 'Bob'})
 CREATE (a)-[:FOLLOWS {since: 2023}]->(b)
 Warning: If you run CREATE (p:Person {name: 'Alice'}) five times, Neo4j will create five separate nodes all named Alice. In a graph, this creates "data pollution." Always use MERGE for entities and CREATE only for events/logs.
 
-// Find all people who follow Alice
-MATCH (follower:Person)-[:FOLLOWS]->(alice:Person {name: 'Bob'})
+// Find all people who follow Bob
+MATCH (follower:Person)-[:FOLLOWS]->(a:Person {name: 'Bob'})
 RETURN follower.name, follower.age
 
 
@@ -32,10 +32,8 @@ ON CREATE SET
 MERGE (s:Skill {name: 'Java'})
 
 // 3. Connect them (The Insert of a Relationship)
-MERGE (e)-[r:HAS_SKILL]->(s)
-ON CREATE SET r.level = 'Expert'
-
-RETURN e, s
+MATCH (p:Employee {empId: 'E-101'}), (s:Skill {name: 'Java'})
+CREATE (p)-[:HAS_SKILL {level:'Expert'}]->(s);
 
 Adding Properties One-by-One
 This is the most common method. If the property doesn't exist, Cypher creates it. If it does exist, Cypher updates it.
