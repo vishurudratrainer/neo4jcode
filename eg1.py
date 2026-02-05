@@ -77,7 +77,7 @@ class Neo4jApp:
 # --- EXECUTION FLOW ---
 if __name__ == "__main__":
     # 1. Connect
-    app = Neo4jApp("bolt://localhost:7687", "neo4j", "your_password")
+    app = Neo4jApp("bolt://localhost:7687", "neo4j", "your_chosen_password")
     
     try:
         # 2. Setup

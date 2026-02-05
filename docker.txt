@@ -50,3 +50,82 @@ While Neo4j has a native LOAD CSV command, the APOC Extended version is superior
 Direct HTTPS/FTP: Better support for various protocols and authentication headers.
 Error Handling: Integrated with periodic.iterate for better failure logging.
 Flexibility: Easier handling of complex escaping and non-standard delimiters.
+
+docker run -d --name neo4j-gds -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password -e NEO4J_PLUGINS="[\"apoc\", \"apoc-extended\",\"graph-data-science\"]" -e NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.* -e NEO4J_dbms_security_procedures_allowlist=gds.*,apoc.* neo4j:latest
+
+GDS
+To run an advanced GDS (Graph Data Science) example directly in your **Neo4j Browser**, you can follow this simple 3-step workflow. This example finds the **Shortest Path** between two cities using weights (costs), which is much faster than standard Cypher for large datasets.
+
+### Step 1: Create a Sample Road Network
+
+Run this in your browser to create a set of cities and the "cost" (distance/price) to travel between them.
+
+```cypher
+CREATE (a:City {name: 'New York'}),
+       (b:City {name: 'Philadelphia'}),
+       (c:City {name: 'Washington DC'}),
+       (d:City {name: 'Baltimore'}),
+       (e:City {name: 'Boston'}),
+       (a)-[:ROAD {cost: 95}]->(b),
+       (b)-[:ROAD {cost: 100}]->(c),
+       (a)-[:ROAD {cost: 215}]->(e),
+       (b)-[:ROAD {cost: 40}]->(d),
+       (d)-[:ROAD {cost: 40}]->(c);
+
+```
+
+---
+
+### Step 2: Create a Graph Projection
+
+GDS doesn't look at your raw database; it looks at a "snapshot" in memory. We need to "project" our cities and roads into this memory space.
+
+```cypher
+CALL gds.graph.project(
+  'travelGraph',    // Name of our snapshot
+  'City',           // Node label to include
+  'ROAD',           // Relationship type to include
+  {
+    relationshipProperties: 'cost' // Include the 'cost' property for weights
+  }
+);
+
+```
+
+---
+
+### Step 3: Run the Shortest Path Algorithm
+
+Now we ask GDS to find the cheapest way to get from **New York** to **Washington DC**.
+
+```cypher
+MATCH (source:City {name: 'New York'}), (target:City {name: 'Washington DC'})
+CALL gds.shortestPath.dijkstra.stream('travelGraph', {
+    sourceNode: source,
+    targetNode: target,
+    relationshipWeightProperty: 'cost'
+})
+YIELD index, sourceNode, targetNode, totalCost, nodeIds, costs
+RETURN [nodeId IN nodeIds | gds.util.asNode(nodeId).name] AS path, totalCost;
+
+```
+
+---
+
+### 💡 Why this is better than standard Cypher
+
+If you ran a standard `MATCH p=shortestPath(...)` in Cypher, it would only count the number of "hops" (jumps). GDS's **Dijkstra** algorithm actually looks at the `cost` property on the lines.
+
+* **Cypher Shortest Path:** Might pick NY ➔ Boston (1 jump) even if it's expensive.
+* **GDS Dijkstra:** Will pick NY ➔ Philly ➔ Baltimore ➔ DC (3 jumps) if the combined cost () is cheaper than the direct flight ().
+
+### 🧹 Cleanup
+
+When you are done, always remove the projection from memory to keep your Docker container light:
+
+```cypher
+CALL gds.graph.drop('travelGraph');
+
+
+pip install graphdatascience pandas
+```

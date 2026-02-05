@@ -1,0 +1,119 @@
+### 1. The "Anchor" Principle (Fast Lookups)
+
+Neo4j queries are only as fast as their first step. If your query starts by scanning every node in the database, it will slow down as your data grows.
+
+* **Before (Slow):** The planner performs an `AllNodesScan` because it doesn't know where to start.
+```cypher
+PROFILE MATCH (p:Person) 
+WHERE p.email = 'dev@example.com' 
+RETURN p;
+
+```
+
+
+* **After (Fast):** By adding a **Unique Constraint**, Neo4j uses a `NodeIndexSeek`, jumping directly to the record in  or  time.
+```cypher
+// Run this once
+CREATE CONSTRAINT FOR (p:Person) REQUIRE p.email IS UNIQUE;
+
+// The query now uses the index automatically
+PROFILE MATCH (p:Person {email: 'dev@example.com'}) 
+RETURN p;
+
+```
+
+
+
+---
+
+### 2. High-Speed Batching with `UNWIND`
+
+If you need to create 10,000 relationships, sending 10,000 separate `MERGE` requests from Python is slow due to network overhead and transaction management. Instead, send **one** list and use `UNWIND`.
+
+```python
+# The 'Advanced' Batch Pattern
+data_batch = [
+    {"from": "A", "to": "B", "cost": 10},
+    {"from": "B", "to": "C", "cost": 20},
+    # ... up to 5,000-10,000 rows
+]
+
+query = """
+UNWIND $batch AS row
+MATCH (source:City {id: row.from})
+MATCH (target:City {id: row.to})
+MERGE (source)-[r:ROAD]->(target)
+SET r.cost = row.cost
+"""
+driver.execute_query(query, batch=data_batch)
+
+```
+
+**Why this works:** It reduces 10,000 transactions into **one**, significantly lowering the "DB Hits" and CPU usage on the server.
+
+---
+
+### 3. GDS Performance Tuning
+
+Graph Data Science algorithms run in a separate memory area. If your container crashes during a GDS run, it's usually a memory allocation issue.
+
+* **Memory Estimation:** Always check if your Docker container has enough RAM before running an algorithm.
+```cypher
+MATCH (source:City {name: 'New York'}), (target:City {name: 'Washington DC'})
+CALL gds.shortestPath.dijkstra.stream.estimate('cityGraph', {
+    sourceNode: source,
+    targetNode: target,
+    relationshipWeightProperty: 'cost'
+})
+YIELD requiredMemory
+RETURN requiredMemory;
+
+```
+
+
+* **Heap vs. Page Cache:** For GDS, increase your **Heap Size** (working memory) even if it means decreasing your **Page Cache** (disk cache). In your Docker environment variables, aim for a heap that is roughly 70-80% of the container's total RAM.
+
+---
+
+### 4. Relationship Direction & Labels
+
+Being specific helps the planner prune the "search tree" early.
+
+| Feature | Less Efficient | More Efficient |
+| --- | --- | --- |
+| **Labels** | `MATCH (n {id: 1})` | `MATCH (n:User {id: 1})` |
+| **Direction** | `MATCH (a)-[:LINK]-(b)` | `MATCH (a)-[:LINK]->(b)` |
+| **Types** | `MATCH (a)-[r]-(b)` | `MATCH (a)-[:FOLLOWS]->(b)` |
+
+---
+
+### 💡 Pro Tip: The "Eager" Problem
+
+If you use `LIMIT` at the end of a long query with multiple `MATCH` clauses, Neo4j might still do all the work before discarding the results. Use `WITH` to limit **early**:
+
+```cypher
+MATCH (u:User)
+WITH u LIMIT 10  // Stop looking after 10 users
+MATCH (u)-[:PURCHASED]->(p:Product)
+RETURN u, p;
+
+```
+
+
+-e NEO4J_db_logs_query_enabled=true \
+    -e NEO4J_db_logs_query_threshold=100ms \
+    -e NEO4J_db_logs_query_parameter__logging__enabled=true \
+    -v $HOME/neo4j/logs:/logs \
+
+
+
+show slow query
+SHOW TRANSACTIONS 
+YIELD currentQuery, elapsedTime, status, username, database
+WHERE elapsedTime > duration('PT1S')
+RETURN currentQuery, elapsedTime, status, username
+ORDER BY elapsedTime DESC;
+
+CALL apoc.periodic.list();
+
+CALL apoc.periodic.cancel("auto-kill-long-queries");
