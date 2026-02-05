@@ -13,7 +13,7 @@ public class App
         try (Neo4jCrudService db = new Neo4jCrudService("bolt://localhost:7687", "neo4j", "your_chosen_password")) {
 
             // Single Insert
-            db.upsertProduct("P-001", "Gaming Mouse", 59.99);
+         /**   db.upsertProduct("P-001", "Gaming Mouse", 59.99);
 
             // Batch Insert
             List<Map<String, Object>> batch = List.of(
@@ -23,10 +23,10 @@ public class App
             db.batchInsertProducts(batch);
 
             // Update
-            db.updateProductPrice("P-001", 49.99);
+            db.updateProductPrice("P-001", 49.99);**/
 
             // Delete
-            db.deleteProduct("P-003");
+           db.deleteProduct("P-003");
 
             System.out.println("CRUD Operations Completed Successfully!");
         }

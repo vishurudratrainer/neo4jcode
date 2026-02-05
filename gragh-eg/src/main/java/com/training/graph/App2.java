@@ -11,7 +11,7 @@ public class App2 {
             System.out.println("Starting Lab...");
 
             tool.setupSchema();
-            tool.bulkInsert(List.of("Eve", "Frank"));
+            tool.bulkInsert(List.of("Eve", "Frank","Alice"));
             tool.connectWithProps("Alice", "Eve", 2);
             tool.deleteOldLogs(30);
             tool.safeDeleteNode("E1"); // Alice
