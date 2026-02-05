@@ -1,8 +1,52 @@
  docker run --name neo4j-instance -p 7474:7474 -p 7687:7687 -d  -v C:\neo4j\data:/data -v C:\neo4j\logs:/logs -v C:\neo4j\import:/var/lib/neo4j/import -v C:\neo4j\plugins:/plugins --env NEO4J_AUTH=neo4j/your_chosen_password neo4j:latest
 
-docker run \
-    --name neo4j-training \
-    -p 7474:7474 -p 7687:7687 \
-    -e NEO4J_AUTH=neo4j/password \
-    -e NEO4J_PLUGINS='["apoc"]' \
-    neo4j:latest
+docker run -d --name neo4j-apoc -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password -e NEO4J_PLUGINS="[\"apoc\", \"apoc-extended\"]" -e NEO4J_dbms_security_procedures_unrestricted=apoc.* neo4j:latest
+
+
+CALL apoc.load.json("https://jsonplaceholder.typicode.com/todos/") YIELD value
+RETURN value.userId, value.id LIMIT 5
+
+
+CALL apoc.periodic.iterate(
+  "CALL apoc.load.json('https://jsonplaceholder.typicode.com') YIELD value RETURN value",
+  "MERGE (t:Todo {id: value.id}) 
+   SET t.title = value.title, 
+       t.completed = value.completed, 
+       t.userId = value.userId",
+  {batchSize: 100, parallel: true}
+)
+
+CALL apoc.periodic.iterate(
+  "CALL apoc.load.json('https://jsonplaceholder.typicode.com') YIELD value RETURN value",
+  "MERGE (t:Todo {id: value.id}) SET t.title = value.title",
+  {batchSize: 100}
+) 
+YIELD batches, total, errorMessages
+RETURN batches, total, errorMessages;
+
+
+CALL apoc.periodic.iterate(
+  "CALL apoc.load.csv('https://gist.githubusercontent.com/netj/8836201/raw/6f9306ad21398ea43cba4f7d537619d0e07d5ae3/iris.csv', {header:true}) YIELD map RETURN map",
+  "CREATE (i:Iris) 
+   SET i.sepalLength = toFloat(map.`sepal.length`), 
+       i.sepalWidth = toFloat(map.`sepal.width`), 
+       i.petalLength = toFloat(map.`petal.length`), 
+       i.petalWidth = toFloat(map.`petal.width`), 
+       i.variety = map.variety",
+  {batchSize: 100, parallel: true}
+)
+
+
+LOAD CSV WITH HEADERS FROM 'https://gist.githubusercontent.com' AS row
+CREATE (i:Iris)
+SET i.sepalLength = toFloat(row.`sepal.length`),
+    i.sepalWidth = toFloat(row.`sepal.width`),
+    i.petalLength = toFloat(row.`petal.length`),
+    i.petalWidth = toFloat(row.`petal.width`),
+    i.variety = row.variety
+
+Why use APOC instead of standard LOAD CSV?
+While Neo4j has a native LOAD CSV command, the APOC Extended version is superior for:
+Direct HTTPS/FTP: Better support for various protocols and authentication headers.
+Error Handling: Integrated with periodic.iterate for better failure logging.
+Flexibility: Easier handling of complex escaping and non-standard delimiters.
