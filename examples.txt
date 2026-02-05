@@ -55,10 +55,8 @@ SET e.status = 'Permanent',
 MERGE (p:Project {name: 'Cloud Migration'})
 SET p.deadline = date('2026-12-31')
 
-MERGE (e)-[assignment:ASSIGNED_TO]->(p)
-SET assignment.role = 'Lead Developer'
-
-RETURN e, p
+MATCH (p:Employee {empId: 'E-101'}), (s:Project {name: 'Cloud Migration'})
+CREATE (p)-[:ASSIGNED_TO]->(s);
 
 
 
