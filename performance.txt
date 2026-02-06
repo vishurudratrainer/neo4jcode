@@ -160,7 +160,6 @@ RETURN node.name, node.bio, score;
 The Lesson: Explain that this uses Lucene under the hood, allowing for "fuzzy" matches (e.g., searching for "Graphs~" will still find "Graph").
 
 
-To give your trainees a "complete" demonstration, we will simulate a real-world performance crisis. We will create a "messy" database, prove why it’s slow using Profiling, and then fix it using Indexes, Constraints, and Memory tuning.
 
 🏗️ The Demo Setup: "The Chaos Database"
 Run this script first. It creates data without any constraints or indexes.

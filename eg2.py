@@ -3,7 +3,7 @@ from neo4j import GraphDatabase
 
 # --- CONFIGURATION ---
 URI = "neo4j://localhost:7687"  # Use 'neo4j+s://' for Aura/SSL Clusters
-AUTH = ("neo4j", "your_chosen_password")
+AUTH = ("neo4j", "password")
 DATABASE = "neo4j"
 BATCH_SIZE = 5000  # Optimal for cluster stability
 
@@ -17,8 +17,8 @@ class BigDataImporter:
     # STEP 1: Setup Schema (Fastest if done before data load)
     def setup_schema(self):
         with self.driver.session(database=DATABASE) as session:
-            session.execute_write(lambda tx: tx.run("CREATE CONSTRAINT FOR (s:Supplier) REQUIRE s.id IS UNIQUE"))
-            session.execute_write(lambda tx: tx.run("CREATE CONSTRAINT FOR (p:Product) REQUIRE p.id IS UNIQUE"))
+            session.execute_write(lambda tx: tx.run("CREATE CONSTRAINT if not exists FOR (s:Supplier) REQUIRE s.id IS UNIQUE"))
+            session.execute_write(lambda tx: tx.run("CREATE CONSTRAINT if not exists FOR (p:Product) REQUIRE p.id IS UNIQUE"))
             print("✅ Constraints created.")
 
     # STEP 2: The "APOC Approach" (Recommended for extreme speed)

@@ -12,7 +12,7 @@ class Neo4jApp:
     def create_constraints(self):
         """Always ensure indexes exist before performing CRUD at scale."""
         with self.driver.session() as session:
-            session.run("CREATE CONSTRAINT FOR (u:User) REQUIRE u.id IS UNIQUE")
+            session.run("CREATE CONSTRAINT IF NOT EXISTS FOR (u:User) REQUIRE u.id IS UNIQUE")
             print("✅ Constraint for :User(id) initialized.")
 
     # --- CREATE (Multiple Patterns) ---
@@ -100,7 +100,7 @@ if __name__ == "__main__":
         print(app.update_user_email("U1", "bob.new@dev.com"))
 
         # 6. Delete
-        app.delete_user("U2")
+        #app.delete_user("U2")
 
     finally:
         app.close()
