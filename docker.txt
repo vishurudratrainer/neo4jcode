@@ -3,6 +3,34 @@
 docker run -d --name neo4j-apoc -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password -e NEO4J_PLUGINS="[\"apoc\", \"apoc-extended\"]" -e NEO4J_dbms_security_procedures_unrestricted=apoc.* neo4j:latest
 
 docker run --name neo4j-instance -p 7474:7474 -p 7687:7687 -d -v C:\neo4j\data:/data -v C:\neo4j\logs:/logs -v C:\neo4j\import:/var/lib/neo4j/import -v C:\neo4j\plugins:/plugins --env NEO4J_AUTH=neo4j/your_chosen_password --env NEO4J_PLUGINS="[\"apoc\", \"apoc-extended\", \"graph-data-science\"]" --env NEO4J_dbms_security_procedures_unrestricted=apoc.*,gds.* --env NEO4J_dbms_security_procedures_allowlist=apoc.*,gds.* neo4j:latest
+MAC
+docker run --name neo4j-instance \
+  -p 7474:7474 -p 7687:7687 \
+  -d \
+  -v $HOME/neo4j/data:/data \
+  -v $HOME/neo4j/logs:/logs \
+  -v $HOME/neo4j/import:/var/lib/neo4j/import \
+  -v $HOME/neo4j/plugins:/plugins \
+  --env NEO4J_AUTH=neo4j/your_chosen_password \
+  --env NEO4J_PLUGINS='["apoc", "apoc-extended", "graph-data-science"]' \
+  --env NEO4J_dbms_security_procedures_unrestricted=apoc.*,gds.* \
+  --env NEO4J_dbms_security_procedures_allowlist=apoc.*,gds.* \
+  neo4j:latest
+ubuntu
+docker run --name neo4j-instance \
+  -p 7474:7474 -p 7687:7687 \
+  -d \
+  -v $HOME/neo4j/data:/data \
+  -v $HOME/neo4j/logs:/logs \
+  -v $HOME/neo4j/import:/var/lib/neo4j/import \
+  -v $HOME/neo4j/plugins:/plugins \
+  --env NEO4J_AUTH=neo4j/your_chosen_password \
+  --env NEO4J_PLUGINS='["apoc", "apoc-extended", "graph-data-science"]' \
+  --env NEO4J_dbms_security_procedures_unrestricted=apoc.*,gds.* \
+  --env NEO4J_dbms_security_procedures_allowlist=apoc.*,gds.* \
+  neo4j:latest
+
+
 CALL apoc.load.json("https://jsonplaceholder.typicode.com/todos/") YIELD value
 RETURN value.userId, value.id, value.title LIMIT 5
 

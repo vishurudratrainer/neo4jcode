@@ -3,7 +3,7 @@ from neo4j import GraphDatabase
 
 # --- CONFIGURATION ---
 URI = "neo4j://localhost:7687"  # Use 'neo4j+s://' for Aura/SSL Clusters
-AUTH = ("neo4j", "password")
+AUTH = ("neo4j", "your_chosen_password")
 DATABASE = "neo4j"
 BATCH_SIZE = 5000  # Optimal for cluster stability
 
